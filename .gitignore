@@ -1,0 +1,30 @@
+# Arquivos de compilação (build)
+[Bb]in/
+[Oo]bj/
+
+# Arquivos gerados pelo Visual Studio
+.vs/
+*.user
+*.suo
+*.sln.docstates
+
+# Arquivos de configuração do usuário
+*.DotSettings.user
+
+# Diretório de pacotes do NuGet (geralmente restaurado via build)
+**/[Pp]ackages/
+
+# Resultados de testes
+[Tt]est[Rr]esult*/
+
+# Arquivos de log
+*.log
+
+# Arquivos de configuração local (com senhas/chaves)
+appsettings.Development.json
+appsettings.Local.json
+*.secrets.json
+
+# Arquivos específicos do sistema operacional
+Thumbs.db
+.DS_Store
