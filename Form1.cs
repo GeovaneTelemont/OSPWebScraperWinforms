@@ -340,86 +340,105 @@ public partial class Form1 : Form
     }
 
     private async void BtnIniciar_Click(object? sender, EventArgs e)
+{
+    // Verificações iniciais
+    if (!btnIniciar.Enabled)
     {
-        // Verificações iniciais
-        if (!btnIniciar.Enabled)
+        AdicionarLog("⚠️ Selecione um arquivo CSV válido primeiro.");
+        return;
+    }
+    
+    if (estaExecutando)
+    {
+        AdicionarLog("⚠️ Já existe um processo em execução.");
+        return;
+    }
+    
+    if (!ValidarCredenciais())
+    {
+        return;
+    }
+    
+    if (string.IsNullOrEmpty(caminhoCsv) || !File.Exists(caminhoCsv))
+    {
+        MessageBox.Show("Arquivo CSV não encontrado.", "Erro", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        AtualizarAparenciaBotaoIniciar(false);
+        return;
+    }
+    
+    cts = new CancellationTokenSource();
+    
+    try
+    {
+        estaExecutando = true;
+        SetUIControlsEnabled(false);
+        
+        AdicionarLog("🚀 Iniciando scraping...");
+        AdicionarLog($"👤 Usuário: {txtUsuario.Text}");
+        AdicionarLog($"👻 Modo headless: {(chkHeadless.Checked ? "Ativado" : "Desativado")}");
+        
+        // Inicializa o PlaywrightService
+        _playwrightService = new PlaywrightService(logService);
+        await _playwrightService.Inicializar(chkHeadless.Checked);
+        
+        // Verifica se o login foi bem sucedido
+        if (!_playwrightService.IsLoggedIn)
         {
-            AdicionarLog("⚠️ Selecione um arquivo CSV válido primeiro.");
-            return;
+            throw new Exception("Não foi possível realizar login. Verifique suas credenciais.");
         }
         
-        if (estaExecutando)
-        {
-            AdicionarLog("⚠️ Já existe um processo em execução.");
-            return;
-        }
+        // Aguarda um pouco para a página estabilizar
+        await Task.Delay(2000);
         
-        if (!ValidarCredenciais())
-        {
-            return;
-        }
+        // Executa o scraping
+        await ExecutarScraping(cts.Token);
         
-        if (string.IsNullOrEmpty(caminhoCsv) || !File.Exists(caminhoCsv))
+        if (!cts.Token.IsCancellationRequested)
         {
-            MessageBox.Show("Arquivo CSV não encontrado.", "Erro", MessageBoxButtons.OK, MessageBoxIcon.Error);
-            AtualizarAparenciaBotaoIniciar(false);
-            return;
-        }
-        
-        cts = new CancellationTokenSource();
-        
-        try
-        {
-            estaExecutando = true;
-            SetUIControlsEnabled(false);
-            
-            AdicionarLog("🚀 Iniciando scraping...");
-            AdicionarLog($"👤 Usuário: {txtUsuario.Text}");
-            AdicionarLog($"👻 Modo headless: {(chkHeadless.Checked ? "Ativado" : "Desativado")}");
-            
-            // Inicializa o PlaywrightService
-            _playwrightService = new PlaywrightService(logService);
-            await _playwrightService.Inicializar(chkHeadless.Checked);
-            
-            // Executa o scraping
-            await ExecutarScraping(cts.Token);
-            
-            if (!cts.Token.IsCancellationRequested)
-            {
-                MessageBox.Show("Scraping concluído com sucesso!", "Sucesso",
-                    MessageBoxButtons.OK, MessageBoxIcon.Information);
-            }
-        }
-        catch (OperationCanceledException)
-        {
-            AdicionarLog("⚠️ Processo cancelado pelo usuário.");
-            MessageBox.Show("Scraping cancelado!", "Cancelado",
-                MessageBoxButtons.OK, MessageBoxIcon.Warning);
-        }
-        catch (Exception ex)
-        {
-            AdicionarLog($"❌ Erro: {ex.Message}");
-            MessageBox.Show(ex.Message, "Erro", MessageBoxButtons.OK, MessageBoxIcon.Error);
-        }
-        finally
-        {
-            estaExecutando = false;
-            SetUIControlsEnabled(true);
-            AtualizarProgresso(0, "Aguardando início...");
-            
-            if (_playwrightService != null)
-            {
-                await _playwrightService.Fechar();
-                _playwrightService = null;
-            }
-            
-            cts?.Dispose();
-            cts = null;
-            
-            AdicionarLog("🏁 Processo finalizado.");
+            MessageBox.Show("Scraping concluído com sucesso!", "Sucesso",
+                MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
     }
-
+    catch (OperationCanceledException)
+    {
+        AdicionarLog("⚠️ Processo cancelado pelo usuário.");
+        MessageBox.Show("Scraping cancelado!", "Cancelado",
+            MessageBoxButtons.OK, MessageBoxIcon.Warning);
+    }
+    catch (Exception ex)
+    {
+        AdicionarLog($"❌ Erro: {ex.Message}");
+        MessageBox.Show($"Erro: {ex.Message}", "Erro", MessageBoxButtons.OK, MessageBoxIcon.Error);
+    }
+    finally
+    {
+        estaExecutando = false;
+        
+        if (_playwrightService != null)
+        {
+            try
+            {
+                await _playwrightService.Fechar();
+            }
+            catch (Exception ex)
+            {
+                AdicionarLog($"⚠️ Erro ao fechar navegador: {ex.Message}");
+            }
+            finally
+            {
+                _playwrightService = null;
+            }
+        }
+        
+        SetUIControlsEnabled(true);
+        AtualizarProgresso(0, "Aguardando início...");
+        
+        cts?.Dispose();
+        cts = null;
+        
+        AdicionarLog("🏁 Processo finalizado.");
+    }
+}
     private async Task ExecutarScraping(CancellationToken cancellationToken)
     {
         try
